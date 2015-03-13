@@ -4,8 +4,11 @@
 
 #include <node.h>
 #include <mraa/gpio.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 
-#define SAMPLES_LOG2 16
+#define SAMPLES_LOG2 8
 
 using namespace v8;
 
@@ -20,11 +23,11 @@ class HX711 : public node::ObjectWrap {
 		static v8::Handle<v8::Value> New(const v8::Arguments& args);
 		static v8::Handle<v8::Value> GetValue(const v8::Arguments& args);
 		static v8::Persistent<v8::Function> constructor;
-		mraa_gpio_context SCK;
-		mraa_gpio_context DATA;
-		float CALIBRATION;
-		long read();
-		long preciseReading(int samples = 10);
+		mraa_gpio_context m_sckPinCtx;
+		mraa_gpio_context m_dataPinCtx;
+		int32_t m_calibration;
+		int32_t read();
+		int32_t preciseReading(uint8_t samples = 1);
 };
 
 #endif /* HX711_H */
