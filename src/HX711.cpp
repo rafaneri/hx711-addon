@@ -90,10 +90,15 @@ Handle<Value> HX711::GetValue(const Arguments& args) {
     
     HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
     
-    int32_t samples = args[0]->IsUndefined() ? 1 : args[0]->NumberValue();
-    int32_t result = obj->preciseReading(samples) - obj->m_calibration;
+    int32_t result = obj->preciseReading() - obj->m_calibration;
+    usleep(1);
     
-    return scope.Close(Number::New(result));
+    Local<Function> cb = Local<Function>::Cast(args[0]);
+    const unsigned argc = 1;
+    Local<Value> argv[argc] = { Local<Value>::New(Number::New(result)) };
+    cb->Call(Context::GetCurrent()->Global(), argc, argv);
+    
+    return scope.Close(Undefined());
 }
                               
 int32_t HX711::read() {
