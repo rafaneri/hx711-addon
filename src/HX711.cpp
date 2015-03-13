@@ -1,10 +1,12 @@
 #include <iostream>
+#include <fstream>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include "HX711.h"
 
 using namespace v8;
+using namespace std;
 
 Persistent<Function> HX711::constructor;
 
@@ -38,7 +40,7 @@ HX711::HX711(uint8_t data, uint8_t sck) {
         throw HX711Exception ("Couldn't set direction for CLOCK pin.");
     }
 
-    this->m_calibration = preciseReading();
+    this->m_calibration = this->preciseReading();
 }
 
 HX711::~HX711() {
@@ -91,7 +93,6 @@ Handle<Value> HX711::GetValue(const Arguments& args) {
     HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
     
     int32_t result = obj->preciseReading() - obj->m_calibration;
-    usleep(1);
     
     Local<Function> cb = Local<Function>::Cast(args[0]);
     const unsigned argc = 1;
@@ -101,35 +102,41 @@ Handle<Value> HX711::GetValue(const Arguments& args) {
     return scope.Close(Undefined());
 }
                               
-int32_t HX711::read() {
+int32_t HX711::adcRead() {
     int32_t v = 0;
-                                  
-    while (mraa_gpio_read(this->m_dataPinCtx));
+    
+    ofstream myfile;
+    myfile.open ("output.txt", ios::app);
+    
+    while (mraa_gpio_read(this->m_dataPinCtx) == 1);
                                   
     for (int i=0; i<24; i++)
     {
         mraa_gpio_write(this->m_sckPinCtx, 1);
-        usleep(1);
         v <<= 1;
-        v |= mraa_gpio_read(this->m_dataPinCtx);
+        v |= (mraa_gpio_read(this->m_dataPinCtx) == 1) ? 1 : 0;
         mraa_gpio_write(this->m_sckPinCtx, 0);
-        usleep(1);
     }
                                   
     mraa_gpio_write(this->m_sckPinCtx, 1);
-    usleep(1);
     mraa_gpio_write(this->m_sckPinCtx, 0);
                                   
     v |= (v & 0x00800000) ? 0xff000000 : 0x00000000;
-                                  
+
+    myfile << "vf: ";
+    myfile << v;
+    myfile << "\n";
+    myfile.close();
+    
     return v;
 }
-                              
-int32_t HX711::preciseReading(uint8_t samples) {
+
+int32_t HX711::preciseReading()
+{
     int32_t v = 0;
-    for (int i=0; i<samples; i++)
+    for (int i=0; i<SAMPLES; i++)
     {
-        v += read();
+        v += adcRead();
     }
-    return ((v/samples) >> SAMPLES_LOG2);
+    return ((v/SAMPLES) >> SAMPLES_LOG2);
 }

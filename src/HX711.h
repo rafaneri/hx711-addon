@@ -9,6 +9,7 @@
 #include <string.h>
 
 #define SAMPLES_LOG2 8
+#define SAMPLES 4
 
 using namespace v8;
 
@@ -26,8 +27,8 @@ class HX711 : public node::ObjectWrap {
 		mraa_gpio_context m_sckPinCtx;
 		mraa_gpio_context m_dataPinCtx;
 		int32_t m_calibration;
-		int32_t read();
-		int32_t preciseReading(uint8_t samples = 1);
+		int32_t adcRead();
+        int32_t preciseReading();
 };
 
 #endif /* HX711_H */
