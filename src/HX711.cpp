@@ -1,24 +1,58 @@
 #include <iostream>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include "HX711.h"
 
 using namespace v8;
 
 Persistent<Function> HX711::constructor;
 
-HX711::HX711(uint8_t data, uint8_t sck) {    
-    mraa_init();
-    DATA = mraa_gpio_init(data);
-    SCK = mraa_gpio_init(sck);
-    
-    mraa_gpio_dir(DATA, MRAA_GPIO_IN);
-    mraa_gpio_dir(SCK, MRAA_GPIO_OUT);
+struct HX711Exception : public std::exception {
+    std::string message;
+    HX711Exception (std::string msg) : message (msg) { }
+    ~HX711Exception () throw () { }
+    const char* what() const throw () { return message.c_str(); }
+};
 
-    CALIBRATION = preciseReading();
+HX711::HX711(uint8_t data, uint8_t sck) {
+    mraa_result_t error = MRAA_SUCCESS;
+    
+    this->m_dataPinCtx = mraa_gpio_init(data);
+    if (this->m_dataPinCtx == NULL) {
+        throw HX711Exception ("Couldn't initilize DATA pin.");
+    }
+    
+    this->m_sckPinCtx = mraa_gpio_init(sck);
+    if (this->m_sckPinCtx == NULL) {
+        throw HX711Exception ("Couldn't initilize CLOCK pin.");
+    }
+    
+    error = mraa_gpio_dir (this->m_dataPinCtx, MRAA_GPIO_IN);
+    if (error != MRAA_SUCCESS) {
+        throw HX711Exception ("Couldn't set direction for DATA pin.");
+    }
+    
+    error = mraa_gpio_dir (this->m_sckPinCtx, MRAA_GPIO_OUT);
+    if (error != MRAA_SUCCESS) {
+        throw HX711Exception ("Couldn't set direction for CLOCK pin.");
+    }
+
+    this->m_calibration = preciseReading();
 }
 
 HX711::~HX711() {
-    mraa_gpio_close(DATA);
-    mraa_gpio_close(SCK);
+    mraa_result_t error = MRAA_SUCCESS;
+    
+    error = mraa_gpio_close (this->m_dataPinCtx);
+    if (error != MRAA_SUCCESS) {
+        mraa_result_print(error);
+    }
+    
+    error = mraa_gpio_close (this->m_sckPinCtx);
+    if (error != MRAA_SUCCESS) {
+        mraa_result_print(error);
+    }
 }
 
 void HX711::Init(Handle<Object> exports) {
@@ -56,37 +90,41 @@ Handle<Value> HX711::GetValue(const Arguments& args) {
     
     HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
     
-    int samples = args[0]->IsUndefined() ? 10 : args[0]->NumberValue();
+    int32_t samples = args[0]->IsUndefined() ? 1 : args[0]->NumberValue();
+    int32_t result = obj->preciseReading(samples) - obj->m_calibration;
     
-    return scope.Close(Number::New(obj->preciseReading(samples)));
+    return scope.Close(Number::New(result));
 }
                               
-long HX711::read() {
-    long v = 0;
+int32_t HX711::read() {
+    int32_t v = 0;
                                   
-    while (mraa_gpio_read(DATA) == 1);
+    while (mraa_gpio_read(this->m_dataPinCtx));
                                   
     for (int i=0; i<24; i++)
     {
-        mraa_gpio_write(SCK, 1);
+        mraa_gpio_write(this->m_sckPinCtx, 1);
+        usleep(1);
         v <<= 1;
-        v |= (mraa_gpio_read(DATA) == 1) ? 1 : 0;
-        mraa_gpio_write(SCK, 0);
+        v |= mraa_gpio_read(this->m_dataPinCtx);
+        mraa_gpio_write(this->m_sckPinCtx, 0);
+        usleep(1);
     }
                                   
-    mraa_gpio_write(SCK, 1);
-    mraa_gpio_write(SCK, 0);
+    mraa_gpio_write(this->m_sckPinCtx, 1);
+    usleep(1);
+    mraa_gpio_write(this->m_sckPinCtx, 0);
                                   
     v |= (v & 0x00800000) ? 0xff000000 : 0x00000000;
                                   
     return v;
 }
                               
-long HX711::preciseReading(int samples) {
-    long v = 0;
+int32_t HX711::preciseReading(uint8_t samples) {
+    int32_t v = 0;
     for (int i=0; i<samples; i++)
     {
         v += read();
     }
-    return (v >> SAMPLES_LOG2);
+    return ((v/samples) >> SAMPLES_LOG2);
 }
