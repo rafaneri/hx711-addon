@@ -89,12 +89,7 @@ Handle<Value> HX711::GetValue(const Arguments& args) {
     HandleScope scope;
     
     HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
-    unsigned long result = 0;
-    
-    do
-    {
-        result = obj->adcRead();
-    }while(!(result ^ 0xffffff));
+    unsigned long result = obj->adcRead();
     
     return scope.Close(Number::New(result));
 }
