@@ -39,8 +39,6 @@ HX711::HX711(uint8_t data, uint8_t sck) {
     if (error != MRAA_SUCCESS) {
         throw HX711Exception ("Couldn't set direction for CLOCK pin.");
     }
-
-    this->m_calibration = this->preciseReading();
 }
 
 HX711::~HX711() {
@@ -91,52 +89,30 @@ Handle<Value> HX711::GetValue(const Arguments& args) {
     HandleScope scope;
     
     HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
+    unsigned long result = obj->adcRead();
     
-    int32_t result = obj->preciseReading() - obj->m_calibration;
-    
-    Local<Function> cb = Local<Function>::Cast(args[0]);
-    const unsigned argc = 1;
-    Local<Value> argv[argc] = { Local<Value>::New(Number::New(result)) };
-    cb->Call(Context::GetCurrent()->Global(), argc, argv);
-    
-    return scope.Close(Undefined());
+    return scope.Close(Number::New(result));
 }
-                              
-int32_t HX711::adcRead() {
-    int32_t v = 0;
+
+unsigned long HX711::adcRead() {
+    unsigned long Count = 0;
     
-    ofstream myfile;
-    myfile.open ("output.txt", ios::app);
-    
-    while (mraa_gpio_read(this->m_dataPinCtx) == 1);
+    while (mraa_gpio_read(this->m_dataPinCtx));
                                   
     for (int i=0; i<24; i++)
     {
         mraa_gpio_write(this->m_sckPinCtx, 1);
-        v <<= 1;
-        v |= (mraa_gpio_read(this->m_dataPinCtx) == 1) ? 1 : 0;
+        Count = Count << 1;
         mraa_gpio_write(this->m_sckPinCtx, 0);
+        if(mraa_gpio_read(this->m_dataPinCtx))
+        {
+            Count++;
+        }
     }
                                   
     mraa_gpio_write(this->m_sckPinCtx, 1);
+    Count = Count ^ 0x800000;
     mraa_gpio_write(this->m_sckPinCtx, 0);
-                                  
-    v |= (v & 0x00800000) ? 0xff000000 : 0x00000000;
 
-    myfile << "vf: ";
-    myfile << v;
-    myfile << "\n";
-    myfile.close();
-    
-    return v;
-}
-
-int32_t HX711::preciseReading()
-{
-    int32_t v = 0;
-    for (int i=0; i<SAMPLES; i++)
-    {
-        v += adcRead();
-    }
-    return ((v/SAMPLES) >> SAMPLES_LOG2);
+    return (Count);
 }

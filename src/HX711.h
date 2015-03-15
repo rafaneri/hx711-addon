@@ -26,9 +26,8 @@ class HX711 : public node::ObjectWrap {
 		static v8::Persistent<v8::Function> constructor;
 		mraa_gpio_context m_sckPinCtx;
 		mraa_gpio_context m_dataPinCtx;
-		int32_t m_calibration;
-		int32_t adcRead();
-        int32_t preciseReading();
+		unsigned long m_calibration;
+		unsigned long adcRead();
 };
 
 #endif /* HX711_H */
