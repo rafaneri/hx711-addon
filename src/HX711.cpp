@@ -17,7 +17,7 @@ struct HX711Exception : public std::exception {
     const char* what() const throw () { return message.c_str(); }
 };
 
-HX711::HX711(uint8_t data, uint8_t sck) {
+HX711::HX711(uint8_t data, uint8_t sck, uint8_t gain) {
     mraa_result_t error = MRAA_SUCCESS;
     
     this->m_dataPinCtx = mraa_gpio_init(data);
@@ -39,6 +39,8 @@ HX711::HX711(uint8_t data, uint8_t sck) {
     if (error != MRAA_SUCCESS) {
         throw HX711Exception ("Couldn't set direction for CLOCK pin.");
     }
+
+    this->setGain(gain);
 }
 
 HX711::~HX711() {
@@ -61,8 +63,22 @@ void HX711::Init(Handle<Object> exports) {
     tpl->SetClassName(String::NewSymbol("HX711"));
     tpl->InstanceTemplate()->SetInternalFieldCount(1);
     // Prototype
+    tpl->PrototypeTemplate()->Set(String::NewSymbol("read"),
+                                  FunctionTemplate::New(Read)->GetFunction());
+    tpl->PrototypeTemplate()->Set(String::NewSymbol("setGain"),
+                                  FunctionTemplate::New(SetGain)->GetFunction());
+    tpl->PrototypeTemplate()->Set(String::NewSymbol("readAverage"),
+                                  FunctionTemplate::New(ReadAverage)->GetFunction());
     tpl->PrototypeTemplate()->Set(String::NewSymbol("getValue"),
                                   FunctionTemplate::New(GetValue)->GetFunction());
+    tpl->PrototypeTemplate()->Set(String::NewSymbol("getUnits"),
+                                  FunctionTemplate::New(GetUnits)->GetFunction());
+    tpl->PrototypeTemplate()->Set(String::NewSymbol("tare"),
+                                  FunctionTemplate::New(Tare)->GetFunction());
+    tpl->PrototypeTemplate()->Set(String::NewSymbol("setScale"),
+                                  FunctionTemplate::New(SetScale)->GetFunction());
+    tpl->PrototypeTemplate()->Set(String::NewSymbol("setOffset"),
+                                  FunctionTemplate::New(SetOffset)->GetFunction());
     constructor = Persistent<Function>::New(tpl->GetFunction());
     exports->Set(String::NewSymbol("HX711"), constructor);
 }
@@ -85,21 +101,161 @@ Handle<Value> HX711::New(const Arguments& args) {
     }
 }
 
-Handle<Value> HX711::GetValue(const Arguments& args) {
+Handle<Value> HX711::Read(const Arguments& args) {
     HandleScope scope;
     
     HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
-    unsigned long result = obj->adcRead();
+    unsigned long result = obj->read();
     
     return scope.Close(Number::New(result));
 }
 
-unsigned long HX711::adcRead() {
+Handle<Value> HX711::SetGain(const Arguments& args) {
+    HandleScope scope;
+    
+    uint8_t gain = 128;
+
+    if (args.Length() > 0) {
+        if (!args[0]->IsNumber()) {
+            ThrowException(Exception::TypeError(String::New("Wrong arguments")));
+            return scope.Close(Undefined());
+        } else {
+            gain = args[0]->NumberValue();
+        }
+    }
+
+    HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
+    obj->setGain(gain);
+    
+    return scope.Close(Undefined());
+}
+
+Handle<Value> HX711::ReadAverage(const Arguments& args) {
+    HandleScope scope;
+
+    uint8_t times = 10;
+
+    if (args.Length() > 0) {
+        if (!args[0]->IsNumber()) {
+            ThrowException(Exception::TypeError(String::New("Wrong arguments")));
+            return scope.Close(Undefined());
+        } else {
+            times = args[0]->NumberValue();
+        }
+    }
+    
+    HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
+    unsigned long result = obj->readAverage(times);
+    
+    return scope.Close(Number::New(result));
+}
+
+Handle<Value> HX711::GetValue(const Arguments& args) {
+    HandleScope scope;
+    
+    uint8_t times = 10;
+
+    if (args.Length() > 0) {
+        if (!args[0]->IsNumber()) {
+            ThrowException(Exception::TypeError(String::New("Wrong arguments")));
+            return scope.Close(Undefined());
+        } else {
+            times = args[0]->NumberValue();
+        }
+    }
+    
+    HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
+    double result = obj->getValue(times);
+    
+    return scope.Close(Number::New(result));
+}
+
+Handle<Value> HX711::GetUnits(const Arguments& args) {
+    HandleScope scope;
+    
+    uint8_t times = 1;
+
+    if (args.Length() > 0) {
+        if (!args[0]->IsNumber()) {
+            ThrowException(Exception::TypeError(String::New("Wrong arguments")));
+            return scope.Close(Undefined());
+        } else {
+            times = args[0]->NumberValue();
+        }
+    }
+    
+    HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
+    float result = obj->getUnits(times);
+    
+    return scope.Close(Number::New(result));
+}
+
+Handle<Value> HX711::Tare(const Arguments& args) {
+    HandleScope scope;
+    
+    uint8_t times = 10;
+
+    if (args.Length() > 0) {
+        if (!args[0]->IsNumber()) {
+            ThrowException(Exception::TypeError(String::New("Wrong arguments")));
+            return scope.Close(Undefined());
+        } else {
+            times = args[0]->NumberValue();
+        }
+    }
+    
+    HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
+    obj->tare(times);
+
+    return scope.Close(Undefined());
+}
+
+Handle<Value> HX711::SetScale(const Arguments& args) {
+    HandleScope scope;
+    
+    float scale = 1.f;
+
+    if (args.Length() > 0) {
+        if (!args[0]->IsNumber()) {
+            ThrowException(Exception::TypeError(String::New("Wrong arguments")));
+            return scope.Close(Undefined());
+        } else {
+            scale = args[0]->NumberValue();
+        }
+    }
+    
+    HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
+    obj->setScale(scale);
+    
+    return scope.Close(Undefined());
+}
+
+Handle<Value> HX711::SetOffset(const Arguments& args) {
+    HandleScope scope;
+    
+    long offset = 0;
+
+    if (args.Length() > 0) {
+        if (!args[0]->IsNumber()) {
+            ThrowException(Exception::TypeError(String::New("Wrong arguments")));
+            return scope.Close(Undefined());
+        } else {
+            offset = args[0]->NumberValue();
+        }
+    }
+    
+    HX711* obj = ObjectWrap::Unwrap<HX711>(args.This());
+    obj->setOffset(offset);
+    
+    return scope.Close(Undefined());
+}
+
+unsigned long HX711::read() {
     unsigned long Count = 0;
     
     while (mraa_gpio_read(this->m_dataPinCtx));
                                   
-    for (int i=0; i<24; i++)
+    for (int i=0; i<GAIN; i++)
     {
         mraa_gpio_write(this->m_sckPinCtx, 1);
         Count = Count << 1;
@@ -109,10 +265,56 @@ unsigned long HX711::adcRead() {
             Count++;
         }
     }
-                                  
+
     mraa_gpio_write(this->m_sckPinCtx, 1);
     Count = Count ^ 0x800000;
     mraa_gpio_write(this->m_sckPinCtx, 0);
 
     return (Count);
+}
+
+void HX711::setGain(uint8_t gain){
+    switch (gain) {
+        case 128:       // channel A, gain factor 128
+            GAIN = 24;
+            break;
+        case 64:        // channel A, gain factor 64
+            GAIN = 26;
+            break;
+        case 32:        // channel B, gain factor 32
+            GAIN = 25;
+            break;
+    }
+
+    mraa_gpio_write(this->m_sckPinCtx, 0);
+    read();
+}
+
+unsigned long HX711::readAverage(uint8_t times){
+    unsigned long sum = 0;
+    for (uint8_t i = 0; i < times; i++) {
+        sum += read();
+    }
+    return sum / times;
+}
+
+double HX711::getValue(uint8_t times){
+    return readAverage(times) - OFFSET;
+}
+
+float HX711::getUnits(uint8_t times){
+    return getValue(times) / SCALE;
+}
+
+void HX711::tare(uint8_t times){
+    double sum = readAverage(times);
+    setOffset(sum);
+}
+
+void HX711::setScale(float scale){
+    SCALE = scale;
+}
+
+void HX711::setOffset(long offset){
+    OFFSET = offset;
 }
